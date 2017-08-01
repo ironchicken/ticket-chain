@@ -1,0 +1,38 @@
+name: ticket-chain
+version: 0.0.1
+synopsis: The event ticket chain
+description: The event ticket chain
+homepage: https://github.com/ironchicken/ticket-chain/
+license: BSD3
+license-file: LICENSE
+author: Richard Lewis
+maintainer: richard@rjlewis.me.uk
+copyright: Copyright (C) 2017 Richard Lewis
+build-type: Simple
+extra-source-files: ChangeLog.md
+cabal-version: >=1.10
+
+library
+  build-depends: base >=4.9 && <4.10
+               , time >= 1.6.0.1 && < 1.9
+  exposed-modules: TicketChain
+  hs-source-dirs: src
+  default-language: Haskell2010
+  ghc-options: -O2
+
+executable ticket-wallet
+  main-is: Wallet.hs
+  build-depends: base >=4.9 && <4.10
+               , ticket-chain
+  hs-source-dirs: prog
+  default-language: Haskell2010
+  ghc-options: -threaded -O2
+
+test-suite chain-tests
+  type: detailed-0.9
+  test-module: TicketChainTests
+  build-depends: base >=4.9 && <4.10
+               , Cabal >= 1.24 && < 1.25
+               , ticket-chain
+  hs-source-dirs: tests
+  default-language: Haskell2010
