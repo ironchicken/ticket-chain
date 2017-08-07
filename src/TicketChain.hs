@@ -1,6 +1,8 @@
 module TicketChain where
 
+import qualified Data.ByteString as BS
 import Data.Time.Clock
+import Network.TLS
 
 type Value = Int
 type EncryptionKey = String
@@ -37,7 +39,7 @@ data Chain = Chain
   { chainHead :: Transaction }
   deriving (Eq, Show)
 
-verifyHolder :: Chain -> Ticket -> Bool
+verifyHolder :: Chain -> Ticket -> Holder -> Bool
 verifyHolder = undefined
 
 verifyTransactionHistory :: Chain -> Ticket -> [(Maybe Holder, Holder, Value)] -> Bool
@@ -46,17 +48,41 @@ verifyTransactionHistory chain transfers = undefined
 verifySoleTransfer :: Chain -> Ticket -> (Maybe Holder, Holder, Value) -> Bool
 verifySoleTransfer chain ticket transfer = undefined
 
-transferTicket :: Chain -> Ticket -> Value -> Maybe Holder -> Holder -> Chain
-transferTicket chain ticket value origin dest = undefined
+transferTicket :: Chain -> Ticket -> Value -> Maybe Holder -> EncryptionKey -> Holder -> EncryptionKey -> Chain
+transferTicket chain ticket value origin originKey dest destKey = undefined
 
-makeTransaction :: Chain -> Ticket -> Value -> Maybe Holder -> Holder -> Transaction
-makeTransaction chain ticket value origin dest = undefined
+presentTicket :: Chain -> Ticket -> Holder -> EncryptionKey -> Holder -> EncryptionKey -> Bool
+presentTicket chain ticket origin originKey dest destKey = undefined
+
+detachStub :: Chain -> Ticket -> (Ticket, Ticket)
+detachStub = undefined
+
+splitTicket :: Chain -> Ticket -> (Ticket, Ticket)
+splitTicket = undefined
+
+makeTransaction :: Chain -> Ticket -> Value -> Maybe Holder -> EncryptionKey -> Holder -> Transaction
+makeTransaction chain ticket value origin originKey dest = undefined
 
 signTransaction :: Transaction -> Transaction
 signTransaction = undefined
 
+appendTransaction :: Chain -> Transaction -> Chain
+appendTransaction = undefined
+
 loadPrivateKey :: IO EncryptionKey
 loadPrivateKey = undefined
+
+serialiseChain :: Chain -> BS.ByteString
+serialiseChain = undefined
+
+unserialiseChain :: BS.ByteString -> Chain
+unserialiseChain = undefined
+
+encryptChain :: BS.ByteString -> EncryptionKey -> BS.ByteString
+encryptChain = undefined
+
+decryptChain :: BS.ByteString -> EncryptionKey -> BS.ByteString
+decryptChain = undefined
 
 loadChain :: FilePath -> IO Chain
 loadChain = undefined
@@ -64,10 +90,16 @@ loadChain = undefined
 writeChain :: FilePath -> Chain -> IO ()
 writeChain = undefined
 
-pullChain :: IO Chain
+wellKnownPeers :: [HostName]
+wellKnownPeers = []
+
+findPeers :: IO [HostName]
+findPeers = undefined
+
+pullChain :: HostName -> IO Chain
 pullChain = undefined
 
-pushChain :: Chain -> IO ()
+pushChain :: Chain -> [HostName] -> IO ()
 pushChain = undefined
 
 traverseChain :: (Transaction -> a) -> Chain -> [a]
