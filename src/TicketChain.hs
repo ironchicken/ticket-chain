@@ -1,6 +1,7 @@
 module TicketChain where
 
 import qualified Data.ByteString as BS
+import Data.Char (chr, ord)
 import Data.Time.Clock
 import Network.TLS
 
@@ -113,3 +114,12 @@ findTransactionsForTicket = undefined
 
 findTransactionsForHolder :: Chain -> Holder -> [Transaction]
 findTransactionsForHolder = undefined
+
+encryptString :: String -> EncryptionKey -> String
+encryptString text _ = map (\c -> chr $ (ord c) + 1) text
+
+decryptString :: String -> EncryptionKey -> String
+decryptString text _ = map (\c -> chr $ (ord c) - 1) text
+
+signString :: String -> EncryptionKey -> String
+signString text _ = map (\c -> chr $ (ord c) + 1) $ take 10 text
