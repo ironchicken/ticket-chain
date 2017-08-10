@@ -68,7 +68,14 @@ signTransaction :: Transaction -> Transaction
 signTransaction = undefined
 
 appendTransaction :: Chain -> Transaction -> Chain
-appendTransaction = undefined
+appendTransaction chain transaction =
+  chain { chainHead = chainedTransaction }
+  where
+    chainedTransaction =
+      transaction { transPreceding = Just oldChainHead
+                  , transFollowing = Nothing
+                  }
+    oldChainHead = chainHead chain
 
 loadPrivateKey :: IO EncryptionKey
 loadPrivateKey = undefined
