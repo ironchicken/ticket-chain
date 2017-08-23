@@ -5,6 +5,15 @@ import Data.Time.Clock
 import Distribution.TestSuite
 import TicketChain
 
+mkTestInstance :: String -> IO Progress -> TestInstance
+mkTestInstance description runTest = TestInstance
+  { run = runTest
+  , name = description
+  , tags = []
+  , options = []
+  , setOption = \_ _ -> Right $ mkTestInstance description runTest
+  }
+
 fakeTicket :: Ticket
 fakeTicket = Ticket
   { ticketId = 1
@@ -39,14 +48,10 @@ fakeTransaction t o d ts = Transaction
   }
 
 appendTransaction_should_update_the_head_of_the_given_chain :: TestInstance
-appendTransaction_should_update_the_head_of_the_given_chain = TestInstance
-  { run = return $ checkUpdatedChain updatedChain newTransaction
-  , name = "appendTransaction should update the head of the given chain"
-  , tags = []
-  , options = []
-  , setOption = \_ _ -> Right appendTransaction_should_update_the_head_of_the_given_chain
-  }
+appendTransaction_should_update_the_head_of_the_given_chain =
+  mkTestInstance "appendTransaction should update the head of the given chain" runTest
   where
+    runTest = return $ checkUpdatedChain updatedChain newTransaction
     updatedChain = appendTransaction initialChain newTransaction
     checkUpdatedChain c t =
       Finished $ if verifyChainHead c t == True
