@@ -49,8 +49,32 @@ verifyTransactionHistory chain transfers = undefined
 verifySoleTransfer :: Chain -> Ticket -> (Maybe Holder, Holder, Value) -> Bool
 verifySoleTransfer chain ticket transfer = undefined
 
-transferTicket :: Chain -> Ticket -> Value -> Maybe Holder -> EncryptionKey -> Holder -> EncryptionKey -> Chain
-transferTicket chain ticket value origin originKey dest destKey = undefined
+appendTicketTransfer :: Chain -> Ticket -> Value -> Maybe Holder -> EncryptionKey -> Holder -> EncryptionKey -> UTCTime -> Chain
+appendTicketTransfer chain ticket value (Just origin) originKey dest destKey time =
+  appendTransaction chain transaction
+  where
+    transaction = signTransactionAsOrigin origin originKey
+      $ signTransactionAsDestination dest destKey
+      $ transferTicket ticket value (Just origin) dest time
+appendTicketTransfer chain ticket value Nothing _ dest destKey time =
+  appendTransaction chain transaction
+  where
+    transaction = signTransactionAsDestination dest destKey
+      $ transferTicket ticket value Nothing dest time
+
+transferTicket :: Ticket -> Value -> Maybe Holder -> Holder -> UTCTime -> Transaction
+transferTicket ticket value origin dest time = Transaction
+  { transTicket = ticket
+  , transOrigin = origin
+  , transDestination = dest
+  , transTimestamp = time
+  , transValue = value
+  , transOriginSignature = ""
+  , transDestinationSignature = ""
+  , transPreceding = Nothing
+  , transFollowing = Nothing
+  , transHash = ""
+  }
 
 presentTicket :: Chain -> Ticket -> Holder -> EncryptionKey -> Holder -> EncryptionKey -> Bool
 presentTicket chain ticket origin originKey dest destKey = undefined
@@ -64,8 +88,20 @@ splitTicket = undefined
 makeTransaction :: Chain -> Ticket -> Value -> Maybe Holder -> EncryptionKey -> Holder -> Transaction
 makeTransaction chain ticket value origin originKey dest = undefined
 
-signTransaction :: Transaction -> Transaction
-signTransaction = undefined
+signTransactionAsOrigin :: Holder -> EncryptionKey -> Transaction -> Transaction
+signTransactionAsOrigin _ originKey transaction =
+  transaction { transOriginSignature = signString (serialiseTransaction transaction) originKey }
+
+signTransactionAsDestination :: Holder -> EncryptionKey -> Transaction -> Transaction
+signTransactionAsDestination _ destKey transaction =
+  transaction { transDestinationSignature = signString (serialiseTransaction transaction) destKey }
+
+serialiseTransaction :: Transaction -> String
+serialiseTransaction transaction =
+  (show $ transTicket transaction)
+  ++ (show $ transTimestamp transaction)
+  ++ (show $ transValue transaction)
+  ++ (show $ transTimestamp transaction)
 
 appendTransaction :: Chain -> Transaction -> Chain
 appendTransaction chain transaction =
