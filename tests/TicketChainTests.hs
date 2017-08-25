@@ -51,20 +51,28 @@ appendTransaction_should_update_the_head_of_the_given_chain :: TestInstance
 appendTransaction_should_update_the_head_of_the_given_chain =
   mkTestInstance "appendTransaction should update the head of the given chain" runTest
   where
-    runTest = return $ checkUpdatedChain updatedChain newTransaction
-    updatedChain = appendTransaction initialChain newTransaction
+    runTest =
+      return $ checkUpdatedChain updatedChain newTransaction
     checkUpdatedChain c t =
       Finished $ if verifyChainHead c t == True
                  then Pass
                  else Fail $ "chainHead is " ++ (show $ chainHead c) ++ "; expecting: " ++ (show t)
-    initialChain = Chain { chainHead = existingTransaction }
-    newTransaction = fakeTransaction fakeTicket Nothing fakeHolder laterTime
-    laterTime = UTCTime
+    verifyChainHead c t =
+      (transTimestamp $ chainHead c) == transTimestamp t
+
+    updatedChain =
+      appendTransaction initialChain newTransaction
+    initialChain =
+      Chain { chainHead = existingTransaction }
+    existingTransaction =
+      fakeTransaction fakeTicket Nothing fakeHolder fakeUTCTime
+    newTransaction =
+      fakeTransaction fakeTicket Nothing fakeHolder laterTime
+    laterTime =
+      UTCTime
       { utctDay = ModifiedJulianDay { toModifiedJulianDay = 0 }
       , utctDayTime = secondsToDiffTime 60
       }
-    existingTransaction = fakeTransaction fakeTicket Nothing fakeHolder fakeUTCTime
-    verifyChainHead c t = (transTimestamp $ chainHead c) == transTimestamp t
 
 appendTicketTransfer_should_create_a_new_transaction :: TestInstance
 appendTicketTransfer_should_create_a_new_transaction =
