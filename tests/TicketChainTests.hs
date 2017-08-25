@@ -106,7 +106,32 @@ appendTicketTransfer_should_sign_the_transaction_with_the_origin_holder_key :: T
 appendTicketTransfer_should_sign_the_transaction_with_the_origin_holder_key =
   mkTestInstance "appendTicketTransfer should sign the transaction with the origin holder key" runTest
   where
-    runTest = return $ Finished $ Fail "todo"
+    runTest =
+      return $ checkUpdatedChain updatedChain ticketDigest
+    checkUpdatedChain chain signature =
+      Finished $ if verifyChainHead chain signature == True
+                 then Pass
+                 else Fail $ "chainHead transaction origin signature is " ++ (show $ transOriginSignature $ chainHead chain) ++ "; expecting: " ++ (show signature)
+    verifyChainHead chain signature =
+      (transOriginSignature $ chainHead chain) == signature
+
+    updatedChain =
+      appendTicketTransfer initialChain newTicket 0 origin originKey fakeHolder "key" fakeUTCTime
+    initialChain =
+      Chain { chainHead = existingTransaction }
+    existingTransaction =
+      fakeTransaction fakeTicket Nothing fakeHolder fakeUTCTime
+    newTicket =
+      fakeTicket { ticketId = 2 }
+    origin =
+      Just fakeHolder
+      { holderIdentity = "origin"
+      , holderPublicKey = "origin-pub-key"
+      }
+    originKey =
+      "origin-priv-key"
+    ticketDigest =
+      signString (serialiseTransaction $ chainHead updatedChain) originKey
 
 appendTicketTransfer_should_sign_the_transaction_with_the_destination_holder_key :: TestInstance
 appendTicketTransfer_should_sign_the_transaction_with_the_destination_holder_key =
