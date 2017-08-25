@@ -159,10 +159,10 @@ findTransactionsForHolder :: Chain -> Holder -> [Transaction]
 findTransactionsForHolder = undefined
 
 encryptString :: String -> EncryptionKey -> String
-encryptString text _ = map (\c -> chr $ (ord c) + 1) text
+encryptString text key = map (\(tc, kc) -> chr $ (ord tc) + (ord kc)) $ zip text (concat $ repeat key)
 
 decryptString :: String -> EncryptionKey -> String
-decryptString text _ = map (\c -> chr $ (ord c) - 1) text
+decryptString text key = map (\(tc, kc) -> chr $ (ord tc) - (ord kc)) $ zip text (concat $ repeat key)
 
 signString :: String -> EncryptionKey -> String
-signString text _ = map (\c -> chr $ (ord c) + 1) $ take 10 text
+signString text key = take 10 $ encryptString text key
