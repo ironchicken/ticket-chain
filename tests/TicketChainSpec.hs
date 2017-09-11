@@ -65,9 +65,41 @@ spec = do
       (transOriginSignature $ chainHead updatedChain) `shouldBe` ticketDigest
 
     it "should sign the transaction with the destination holder key" $ do
-      pending
+      let initialChain =
+            Chain { chainHead = existingTransaction }
+          existingTransaction =
+            fakeTransaction fakeTicket Nothing fakeHolder fakeUTCTime
+          newTicket =
+            fakeTicket { ticketId = 2 }
+          destination =
+            fakeHolder
+            { holderIdentity = "destination"
+            , holderPublicKey = "destination-pub-key"
+            }
+          destinationKey =
+            "destination-priv-key"
+          ticketDigest =
+            signString (serialiseTransaction $ chainHead updatedChain) destinationKey
+          updatedChain =
+            appendTicketTransfer initialChain newTicket 0 Nothing "" destination destinationKey fakeUTCTime
+      (transDestinationSignature $ chainHead updatedChain) `shouldBe` ticketDigest
+
     it "should update the head of the given chain" $ do
-      pending
+      let initialChain =
+            Chain { chainHead = existingTransaction }
+          existingTransaction =
+            fakeTransaction fakeTicket Nothing fakeHolder fakeUTCTime
+          newTicket =
+            Ticket
+            { ticketId = 2
+            , ticketDescription = "New ticket"
+            , ticketFaceValue = newValue
+            }
+          newValue = 5
+          updatedChain =
+            appendTicketTransfer initialChain newTicket newValue Nothing "" fakeHolder "key" fakeUTCTime
+      (chainHead updatedChain) `shouldNotBe` existingTransaction
+
     it "should leave only one transaction for the ticket given there is no origin holder" $ do
       pending
 
