@@ -32,16 +32,6 @@ executable ticket-wallet
   default-language: Haskell2010
   ghc-options: -threaded -O2
 
-test-suite chain-tests
-  type: detailed-0.9
-  test-module: TicketChainTests
-  build-depends: base >=4.9 && <4.10
-               , Cabal >= 1.24 && < 1.25
-               , ticket-chain
-               , time >= 1.6.0.1 && < 1.9
-  hs-source-dirs: tests
-  default-language: Haskell2010
-
 test-suite chain-spec
   type: exitcode-stdio-1.0
   main-is: Spec.hs
