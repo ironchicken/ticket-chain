@@ -11,7 +11,7 @@ type Value = Int
 type EncryptionKey = String
 
 data Ticket = Ticket
-  { ticketId :: Int
+  { ticketId :: String
   , ticketDescription :: String
   , ticketFaceValue :: Value
   }
@@ -166,6 +166,11 @@ foldChain f initial chain = fold initial (chainHead chain)
     fold acc t@(Transaction { transPreceding = Just p }) = fold (f acc t) p
     fold acc t = f acc t
 
+filterChain :: (Transaction -> Bool) -> Chain -> [Transaction]
+filterChain p chain = foldChain filterWithP [] chain
+  where
+    filterWithP ts t = if p t then t : ts else ts
+
 chainLength :: Chain -> Int
 chainLength chain = foldChain (\acc _ -> acc + 1) 0 chain
 
@@ -179,7 +184,10 @@ findTransactionById chain tId =
     checkTransaction (Just t) _ = Just t
 
 findTransactionsForTicket :: Chain -> Ticket -> [Transaction]
-findTransactionsForTicket = undefined
+findTransactionsForTicket chain ticket =
+  filterChain checkTicket chain
+  where
+    checkTicket transaction = transTicket transaction == ticket
 
 findTransactionsForHolder :: Chain -> Holder -> [Transaction]
 findTransactionsForHolder = undefined

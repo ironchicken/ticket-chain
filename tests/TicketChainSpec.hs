@@ -46,6 +46,21 @@ spec = do
           trans2 = (fakeTransaction fakeTicket Nothing fakeHolder fakeUTCTime) { transId = "second" }
       chain `rightShouldSatisfy` (\c -> length (traverseChain id c) == 2)
 
+  describe "filterChain" $ do
+    it "should return a list of transactions which satisfy the predicate" $ do
+      let (Right chain) =
+            appendTransaction Chain { chainHead = trans1 } trans2
+          trans1 = (fakeTransaction fakeTicket Nothing fakeHolder fakeUTCTime) { transId = "first" }
+          trans2 = (fakeTransaction fakeTicket Nothing fakeHolder fakeUTCTime) { transId = "second" }
+      (length (filterChain (\t -> transId t == "first") chain)) `shouldBe` 1
+
+    it "should return an empty list given none of the transactions satisfy the predicate" $ do
+      let (Right chain) =
+            appendTransaction Chain { chainHead = trans1 } trans2
+          trans1 = (fakeTransaction fakeTicket Nothing fakeHolder fakeUTCTime) { transId = "first" }
+          trans2 = (fakeTransaction fakeTicket Nothing fakeHolder fakeUTCTime) { transId = "second" }
+      (length (filterChain (\t -> transId t == "third") chain)) `shouldBe` 0
+
   describe "findTransactionById" $ do
     it "should return just a transaction if one matching the given ID exists in the chain" $ do
       let (Right chain) =
@@ -61,6 +76,22 @@ spec = do
           trans2 = (fakeTransaction fakeTicket Nothing fakeHolder fakeUTCTime) { transId = "second" }
       (findTransactionById chain "third") `shouldBe` Nothing
 
+  describe "findTransactionsForTicket" $ do
+    it "should return a list of transactions for the given ticket" $ do
+      let (Right chain) =
+            appendTransaction Chain { chainHead = trans1 } trans2
+          trans1 = (fakeTransaction fakeTicket Nothing fakeHolder fakeUTCTime) { transId = "first" }
+          trans2 = (fakeTransaction fakeTicket Nothing fakeHolder fakeUTCTime) { transId = "second" }
+      (length (findTransactionsForTicket chain fakeTicket)) `shouldBe` 2
+
+    it "should return an empty list given no transactions exist for the given ticket" $ do
+      let (Right chain) =
+            appendTransaction Chain { chainHead = trans1 } trans2
+          trans1 = (fakeTransaction fakeTicket Nothing fakeHolder fakeUTCTime) { transId = "first" }
+          trans2 = (fakeTransaction fakeTicket Nothing fakeHolder fakeUTCTime) { transId = "second" }
+          otherTicket = fakeTicket { ticketId = "2" }
+      (length (findTransactionsForTicket chain otherTicket)) `shouldBe` 0
+
   describe "chainLength" $ do
     it "should count the number of transactions in the chain" $ do
       let chain = Chain { chainHead = trans1 }
@@ -75,7 +106,7 @@ spec = do
             fakeTransaction fakeTicket Nothing fakeHolder fakeUTCTime
           newTicket =
             Ticket
-            { ticketId = 2
+            { ticketId = "2"
             , ticketDescription = "New ticket"
             , ticketFaceValue = newValue
             }
@@ -92,7 +123,7 @@ spec = do
           existingTransaction =
             fakeTransaction fakeTicket Nothing fakeHolder fakeUTCTime
           newTicket =
-            fakeTicket { ticketId = 2 }
+            fakeTicket { ticketId = "2" }
           newTransId = "new-trans-id"
           origin =
             Just fakeHolder
@@ -113,7 +144,7 @@ spec = do
           existingTransaction =
             fakeTransaction fakeTicket Nothing fakeHolder fakeUTCTime
           newTicket =
-            fakeTicket { ticketId = 2 }
+            fakeTicket { ticketId = "2" }
           newTransId = "new-trans-id"
           destination =
             fakeHolder
@@ -135,7 +166,7 @@ spec = do
             fakeTransaction fakeTicket Nothing fakeHolder fakeUTCTime
           newTicket =
             Ticket
-            { ticketId = 2
+            { ticketId = "2"
             , ticketDescription = "New ticket"
             , ticketFaceValue = newValue
             }
@@ -146,11 +177,25 @@ spec = do
       updatedChain `rightShouldSatisfy` (\c -> (chainHead c) /= existingTransaction)
 
     it "should leave only one transaction for the ticket given there is no origin holder" $ do
-      pending
+      let initialChain =
+            Chain { chainHead = existingTransaction }
+          existingTransaction =
+            fakeTransaction fakeTicket Nothing fakeHolder fakeUTCTime
+          newTicket =
+            Ticket
+            { ticketId = "2"
+            , ticketDescription = "New ticket"
+            , ticketFaceValue = newValue
+            }
+          newValue = 5
+          newTransId = "new-trans-id"
+          updatedChain =
+            appendTicketTransfer initialChain newTransId newTicket newValue Nothing "" fakeHolder "key" fakeUTCTime
+      updatedChain `rightShouldSatisfy` (\c -> length (findTransactionsForTicket c newTicket) == 1)
 
 fakeTicket :: Ticket
 fakeTicket = Ticket
-  { ticketId = 1
+  { ticketId = "1"
   , ticketDescription = "Test"
   , ticketFaceValue = 1
   }
