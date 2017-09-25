@@ -40,11 +40,11 @@ spec = do
 
   describe "traverseChain" $ do
     it "should apply the function to every transaction in the chain" $ do
-      let chain =
+      let (Right chain) =
             appendTransaction Chain { chainHead = trans1 } trans2
           trans1 = (fakeTransaction fakeTicket Nothing fakeHolder fakeUTCTime) { transId = "first" }
           trans2 = (fakeTransaction fakeTicket Nothing fakeHolder fakeUTCTime) { transId = "second" }
-      chain `rightShouldSatisfy` (\c -> length (traverseChain id c) == 2)
+      (length (traverseChain id chain)) `shouldBe` 2
 
   describe "filterChain" $ do
     it "should return a list of transactions which satisfy the predicate" $ do
@@ -112,10 +112,10 @@ spec = do
             }
           newValue = 5
           newTransId = "new-trans-id"
-          updatedChain =
+          (Right updatedChain) =
             appendTicketTransfer initialChain newTransId newTicket newValue Nothing "" fakeHolder "key" fakeUTCTime
-      updatedChain `rightShouldSatisfy` (\c -> (transTicket $ chainHead c) == newTicket)
-      updatedChain `rightShouldSatisfy` (\c -> (transValue $ chainHead c) == newValue)
+      (transTicket $ chainHead updatedChain) `shouldBe` newTicket
+      (transValue $ chainHead updatedChain) `shouldBe` newValue
 
     it "should sign the transaction with the origin holder key" $ do
       let initialChain =
@@ -132,11 +132,11 @@ spec = do
             }
           originKey =
             "origin-priv-key"
-          ticketDigest c =
-            signString (serialiseTransaction $ chainHead c) originKey
-          updatedChain =
+          ticketDigest t =
+            signString (serialiseTransaction t) originKey
+          (Right updatedChain) =
             appendTicketTransfer initialChain newTransId newTicket 0 origin originKey fakeHolder "key" fakeUTCTime
-      updatedChain `rightShouldSatisfy` (\c -> (transOriginSignature $ chainHead c) == ticketDigest c)
+      (transOriginSignature $ chainHead updatedChain) `shouldBe` (ticketDigest $ chainHead updatedChain)
 
     it "should sign the transaction with the destination holder key" $ do
       let initialChain =
@@ -153,11 +153,11 @@ spec = do
             }
           destinationKey =
             "destination-priv-key"
-          ticketDigest c =
-            signString (serialiseTransaction $ chainHead c) destinationKey
-          updatedChain =
+          ticketDigest t =
+            signString (serialiseTransaction t) destinationKey
+          (Right updatedChain) =
             appendTicketTransfer initialChain newTransId newTicket 0 Nothing "" destination destinationKey fakeUTCTime
-      updatedChain `rightShouldSatisfy` (\c -> (transDestinationSignature $ chainHead c) == ticketDigest c)
+      (transDestinationSignature $ chainHead updatedChain) `shouldBe` (ticketDigest $ chainHead updatedChain)
 
     it "should update the head of the given chain" $ do
       let initialChain =
@@ -172,9 +172,9 @@ spec = do
             }
           newValue = 5
           newTransId = "new-trans-id"
-          updatedChain =
+          (Right updatedChain) =
             appendTicketTransfer initialChain newTransId newTicket newValue Nothing "" fakeHolder "key" fakeUTCTime
-      updatedChain `rightShouldSatisfy` (\c -> (chainHead c) /= existingTransaction)
+      (chainHead updatedChain) `shouldNotBe` existingTransaction
 
     it "should leave only one transaction for the ticket given there is no origin holder" $ do
       let initialChain =
@@ -189,9 +189,9 @@ spec = do
             }
           newValue = 5
           newTransId = "new-trans-id"
-          updatedChain =
+          (Right updatedChain) =
             appendTicketTransfer initialChain newTransId newTicket newValue Nothing "" fakeHolder "key" fakeUTCTime
-      updatedChain `rightShouldSatisfy` (\c -> length (findTransactionsForTicket c newTicket) == 1)
+      (length (findTransactionsForTicket updatedChain newTicket)) `shouldBe` 1
 
 fakeTicket :: Ticket
 fakeTicket = Ticket
