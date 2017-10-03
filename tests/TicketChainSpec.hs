@@ -193,6 +193,23 @@ spec = do
             appendTicketTransfer initialChain newTransId newTicket newValue Nothing "" fakeHolder "key" fakeUTCTime
       (length (findTransactionsForTicket updatedChain newTicket)) `shouldBe` 1
 
+    it "should hash the new transaction" $ do
+      let initialChain =
+            Chain { chainHead = existingTransaction }
+          existingTransaction =
+            fakeTransaction fakeTicket Nothing fakeHolder fakeUTCTime
+          newTicket =
+            Ticket
+            { ticketId = "2"
+            , ticketDescription = "New ticket"
+            , ticketFaceValue = newValue
+            }
+          newValue = 5
+          newTransId = "new-trans-id"
+          (Right updatedChain) =
+            appendTicketTransfer initialChain newTransId newTicket newValue Nothing "" fakeHolder "key" fakeUTCTime
+      (transHash $ chainHead updatedChain) `shouldNotBe` ""
+
 fakeTicket :: Ticket
 fakeTicket = Ticket
   { ticketId = "1"
@@ -213,7 +230,8 @@ fakeUTCTime = UTCTime
   }
 
 fakeTransaction :: Ticket -> Maybe Holder -> Holder -> UTCTime -> Transaction
-fakeTransaction t o d ts = Transaction
+fakeTransaction t o d ts = hashTransaction
+  Transaction
   { transId = "1"
   , transTicket = t
   , transOrigin = o

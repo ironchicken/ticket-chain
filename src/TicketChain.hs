@@ -63,13 +63,15 @@ appendTicketTransfer :: Chain -> String -> Ticket -> Value -> Maybe Holder -> En
 appendTicketTransfer chain tId ticket value (Just origin) originKey dest destKey time =
   appendTransaction chain transaction
   where
-    transaction = signTransactionAsOrigin origin originKey
+    transaction = hashTransaction
+      $ signTransactionAsOrigin origin originKey
       $ signTransactionAsDestination dest destKey
       $ transferTicket tId ticket value (Just origin) dest time
 appendTicketTransfer chain tId ticket value Nothing _ dest destKey time =
   appendTransaction chain transaction
   where
-    transaction = signTransactionAsDestination dest destKey
+    transaction = hashTransaction
+      $ signTransactionAsDestination dest destKey
       $ transferTicket tId ticket value Nothing dest time
 
 transferTicket :: String -> Ticket -> Value -> Maybe Holder -> Holder -> UTCTime -> Transaction
@@ -105,6 +107,13 @@ signTransactionAsOrigin _ originKey transaction =
 signTransactionAsDestination :: Holder -> EncryptionKey -> Transaction -> Transaction
 signTransactionAsDestination _ destKey transaction =
   transaction { transDestinationSignature = signString (serialiseTransaction transaction) destKey }
+
+hashTransaction :: Transaction -> Transaction
+hashTransaction transaction =
+  transaction { transHash = hash $ transPreceding transaction }
+  where
+    hash (Just preceding) = digest $ transHash preceding ++ serialiseTransaction transaction
+    hash Nothing = digest $ serialiseTransaction transaction
 
 serialiseTransaction :: Transaction -> String
 serialiseTransaction transaction =
@@ -200,3 +209,6 @@ decryptString text key = map (\(tc, kc) -> chr $ (ord tc) - (ord kc)) $ zip text
 
 signString :: String -> EncryptionKey -> String
 signString text key = take 10 $ encryptString text key
+
+digest :: String -> String
+digest s = signString s "abc123"
