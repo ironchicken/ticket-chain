@@ -41,6 +41,8 @@ data Holder = Holder
   }
   deriving (Eq, Show)
 
+type Transfer = (Maybe Holder, Holder, Value)
+
 data Chain = Chain
   { chainHead :: Transaction }
   deriving (Eq, Show)
@@ -58,6 +60,17 @@ verifyTransactionHistory chain transfers = undefined
 
 verifySoleTransfer :: Chain -> Ticket -> (Maybe Holder, Holder, Value) -> Bool
 verifySoleTransfer chain ticket transfer = undefined
+
+transferHistory :: Chain -> Ticket -> [Transfer]
+transferHistory chain ticket =
+  reverse $ orderTransfers Nothing [] transfers
+  where
+    transactions = findTransactionsForTicket chain ticket
+    transfers = map (\t -> (transOrigin t, transDestination t, transValue t)) transactions
+    orderTransfers currentHolder ordered (t@(o, d, _):ts)
+      | o == currentHolder = orderTransfers (Just d) (t : ordered) transfers
+      | otherwise = orderTransfers currentHolder ordered ts
+    orderTransfers _ ordered [] = ordered
 
 appendTicketTransfer :: Chain -> String -> Ticket -> Value -> Maybe Holder -> EncryptionKey -> Holder -> EncryptionKey -> UTCTime -> Either ChainException Chain
 appendTicketTransfer chain tId ticket value (Just origin) originKey dest destKey time =

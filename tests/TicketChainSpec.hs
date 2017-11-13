@@ -210,6 +210,103 @@ spec = do
             appendTicketTransfer initialChain newTransId newTicket newValue Nothing "" fakeHolder "key" fakeUTCTime
       (transHash $ chainHead updatedChain) `shouldNotBe` ""
 
+  describe "transferHistory" $ do
+    it "should return all the correctly chained transfers relating to the given ticket" $ do
+      let initialChain = Chain { chainHead = t1 }
+          h1 = Holder { holderIdentity = "holder1", holderPublicKey = "key1", holderFingerprint = "finger-print1" }
+          h2 = Holder { holderIdentity = "holder2", holderPublicKey = "key2", holderFingerprint = "finger-print2" }
+          h3 = Holder { holderIdentity = "holder3", holderPublicKey = "key3", holderFingerprint = "finger-print3" }
+          time1 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10000 }, utctDayTime = secondsToDiffTime 60 }
+          time2 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10001 }, utctDayTime = secondsToDiffTime 60 }
+          time3 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10002 }, utctDayTime = secondsToDiffTime 60 }
+          t1 = (fakeTransaction fakeTicket Nothing h1 time1) { transId = "first" }
+          (Right chain2) =
+            appendTicketTransfer initialChain "second" fakeTicket 1 (Just h1) "key1" h2 "key2" time2
+          (Right chain3) =
+            appendTicketTransfer chain2 "third" fakeTicket 1 (Just h2) "key2" h3 "key3" time3
+
+      (transferHistory chain3 fakeTicket) `shouldBe` [(Nothing, h1, 0), (Just h1, h2, 1), (Just h2, h3, 1)]
+
+    it "should return an empty list if no transfers exist for the given ticket" $ do
+      let initialChain = Chain { chainHead = t1 }
+          h1 = Holder { holderIdentity = "holder1", holderPublicKey = "key1", holderFingerprint = "finger-print1" }
+          h2 = Holder { holderIdentity = "holder2", holderPublicKey = "key2", holderFingerprint = "finger-print2" }
+          h3 = Holder { holderIdentity = "holder3", holderPublicKey = "key3", holderFingerprint = "finger-print3" }
+          time1 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10000 }, utctDayTime = secondsToDiffTime 60 }
+          time2 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10001 }, utctDayTime = secondsToDiffTime 60 }
+          time3 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10002 }, utctDayTime = secondsToDiffTime 60 }
+          t1 = (fakeTransaction fakeTicket Nothing h1 time1) { transId = "first" }
+          (Right chain2) =
+            appendTicketTransfer initialChain "second" fakeTicket 1 (Just h1) "key1" h2 "key2" time2
+          (Right chain3) =
+            appendTicketTransfer chain2 "third" fakeTicket 1 (Just h2) "key2" h3 "key3" time3
+          differentTicket =
+            Ticket
+            { ticketId = "2"
+            , ticketDescription = "Ticket"
+            , ticketFaceValue = 1
+            }
+
+      (transferHistory chain3 differentTicket) `shouldBe` []
+
+    it "should return the origin transaction first" $ do
+      let initialChain = Chain { chainHead = t1 }
+          h1 = Holder { holderIdentity = "holder1", holderPublicKey = "key1", holderFingerprint = "finger-print1" }
+          h2 = Holder { holderIdentity = "holder2", holderPublicKey = "key2", holderFingerprint = "finger-print2" }
+          h3 = Holder { holderIdentity = "holder3", holderPublicKey = "key3", holderFingerprint = "finger-print3" }
+          time1 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10000 }, utctDayTime = secondsToDiffTime 60 }
+          time2 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10001 }, utctDayTime = secondsToDiffTime 60 }
+          time3 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10002 }, utctDayTime = secondsToDiffTime 60 }
+          t1 = (fakeTransaction fakeTicket Nothing h1 time3) { transId = "first" }
+          (Right chain2) =
+            appendTicketTransfer initialChain "second" fakeTicket 1 (Just h1) "key1" h2 "key2" time1
+          (Right chain3) =
+            appendTicketTransfer chain2 "third" fakeTicket 1 (Just h2) "key2" h3 "key3" time2
+
+      (head $ transferHistory chain3 fakeTicket) `shouldBe` (Nothing, h1, 0)
+
+    it "should order the transactions by the transfer of ownership" $ do
+      let initialChain = Chain { chainHead = t1 }
+          h1 = Holder { holderIdentity = "holder1", holderPublicKey = "key1", holderFingerprint = "finger-print1" }
+          h2 = Holder { holderIdentity = "holder2", holderPublicKey = "key2", holderFingerprint = "finger-print2" }
+          h3 = Holder { holderIdentity = "holder3", holderPublicKey = "key3", holderFingerprint = "finger-print3" }
+          time1 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10000 }, utctDayTime = secondsToDiffTime 60 }
+          time2 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10001 }, utctDayTime = secondsToDiffTime 60 }
+          time3 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10002 }, utctDayTime = secondsToDiffTime 60 }
+          t1 = (fakeTransaction fakeTicket Nothing h1 time1) { transId = "first" }
+          (Right chain2) =
+            appendTicketTransfer initialChain "third" fakeTicket 1 (Just h2) "key2" h3 "key3" time3
+          (Right chain3) =
+            appendTicketTransfer chain2 "second" fakeTicket 1 (Just h1) "key1" h2 "key2" time2
+
+      (transferHistory chain3 fakeTicket) `shouldBe` [(Nothing, h1, 0), (Just h1, h2, 1), (Just h2, h3, 1)]
+
+    it "should return only non-sparse chains of ownership" $ do
+      let initialChain = Chain { chainHead = t1 }
+          h1 = Holder { holderIdentity = "holder1", holderPublicKey = "key1", holderFingerprint = "finger-print1" }
+          h2 = Holder { holderIdentity = "holder2", holderPublicKey = "key2", holderFingerprint = "finger-print2" }
+          h3 = Holder { holderIdentity = "holder3", holderPublicKey = "key3", holderFingerprint = "finger-print3" }
+          time1 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10000 }, utctDayTime = secondsToDiffTime 60 }
+          time2 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10001 }, utctDayTime = secondsToDiffTime 60 }
+          t1 = (fakeTransaction fakeTicket Nothing h1 time1) { transId = "first" }
+          (Right chain2) =
+            appendTicketTransfer initialChain "second" fakeTicket 1 (Just h2) "key2" h3 "key3" time2
+
+      (transferHistory chain2 fakeTicket) `shouldBe` [(Nothing, h1, 0)]
+
+    it "should return an empty list given the origin transaction is not in the ticket chain" $ do
+      let initialChain = Chain { chainHead = t1 }
+          h1 = Holder { holderIdentity = "holder1", holderPublicKey = "key1", holderFingerprint = "finger-print1" }
+          h2 = Holder { holderIdentity = "holder2", holderPublicKey = "key2", holderFingerprint = "finger-print2" }
+          h3 = Holder { holderIdentity = "holder3", holderPublicKey = "key3", holderFingerprint = "finger-print3" }
+          time1 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10000 }, utctDayTime = secondsToDiffTime 60 }
+          time2 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10001 }, utctDayTime = secondsToDiffTime 60 }
+          t1 = (fakeTransaction fakeTicket (Just h1) h2 time1) { transId = "first" }
+          (Right chain2) =
+            appendTicketTransfer initialChain "second" fakeTicket 1 (Just h2) "key2" h3 "key3" time2
+
+      (transferHistory chain2 fakeTicket) `shouldBe` []
+
 fakeTicket :: Ticket
 fakeTicket = Ticket
   { ticketId = "1"
