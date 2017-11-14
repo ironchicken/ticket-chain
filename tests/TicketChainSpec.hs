@@ -307,6 +307,157 @@ spec = do
 
       (transferHistory chain2 fakeTicket) `shouldBe` []
 
+  describe "verifyCurrentHolder" $ do
+    it "should return True if the given ticket has the given holder" $ do
+      let initialChain = Chain { chainHead = t1 }
+          h1 = Holder { holderIdentity = "holder1", holderPublicKey = "key1", holderFingerprint = "finger-print1" }
+          h2 = Holder { holderIdentity = "holder2", holderPublicKey = "key2", holderFingerprint = "finger-print2" }
+          h3 = Holder { holderIdentity = "holder3", holderPublicKey = "key3", holderFingerprint = "finger-print3" }
+          time1 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10000 }, utctDayTime = secondsToDiffTime 60 }
+          time2 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10001 }, utctDayTime = secondsToDiffTime 60 }
+          time3 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10002 }, utctDayTime = secondsToDiffTime 60 }
+          t1 = (fakeTransaction fakeTicket Nothing h1 time1) { transId = "first" }
+          (Right chain2) =
+            appendTicketTransfer initialChain "second" fakeTicket 1 (Just h1) "key1" h2 "key2" time2
+          (Right chain3) =
+            appendTicketTransfer chain2 "third" fakeTicket 1 (Just h2) "key2" h3 "key3" time3
+
+      (verifyCurrentHolder chain3 fakeTicket h3) `shouldBe` True
+
+    it "should return False if the given ticket does not have the given holder" $ do
+      let initialChain = Chain { chainHead = t1 }
+          h1 = Holder { holderIdentity = "holder1", holderPublicKey = "key1", holderFingerprint = "finger-print1" }
+          h2 = Holder { holderIdentity = "holder2", holderPublicKey = "key2", holderFingerprint = "finger-print2" }
+          h3 = Holder { holderIdentity = "holder3", holderPublicKey = "key3", holderFingerprint = "finger-print3" }
+          time1 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10000 }, utctDayTime = secondsToDiffTime 60 }
+          time2 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10001 }, utctDayTime = secondsToDiffTime 60 }
+          time3 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10002 }, utctDayTime = secondsToDiffTime 60 }
+          t1 = (fakeTransaction fakeTicket Nothing h1 time1) { transId = "first" }
+          (Right chain2) =
+            appendTicketTransfer initialChain "second" fakeTicket 1 (Just h1) "key1" h2 "key2" time2
+          (Right chain3) =
+            appendTicketTransfer chain2 "third" fakeTicket 1 (Just h2) "key2" h3 "key3" time3
+
+      (verifyCurrentHolder chain3 fakeTicket h1) `shouldBe` False
+
+  describe "verifyTransferHistory" $ do
+    it "should return True if the given transfer history matches the transfer history for the given ticket" $ do
+      let initialChain = Chain { chainHead = t1 }
+          h1 = Holder { holderIdentity = "holder1", holderPublicKey = "key1", holderFingerprint = "finger-print1" }
+          h2 = Holder { holderIdentity = "holder2", holderPublicKey = "key2", holderFingerprint = "finger-print2" }
+          h3 = Holder { holderIdentity = "holder3", holderPublicKey = "key3", holderFingerprint = "finger-print3" }
+          time1 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10000 }, utctDayTime = secondsToDiffTime 60 }
+          time2 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10001 }, utctDayTime = secondsToDiffTime 60 }
+          time3 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10002 }, utctDayTime = secondsToDiffTime 60 }
+          t1 = (fakeTransaction fakeTicket Nothing h1 time1) { transId = "first" }
+          (Right chain2) =
+            appendTicketTransfer initialChain "second" fakeTicket 1 (Just h1) "key1" h2 "key2" time2
+          (Right chain3) =
+            appendTicketTransfer chain2 "third" fakeTicket 1 (Just h2) "key2" h3 "key3" time3
+          eqPredicate (a, b) = a == b
+
+      (verifyTransferHistory chain3 fakeTicket [(Nothing, h1, 0), (Just h1, h2, 1), (Just h2, h3, 1)] eqPredicate) `shouldBe` True
+
+    it "should return True if the given transfer history matches the transfer history for the given ticket according to the given predicate" $ do
+      let initialChain = Chain { chainHead = t1 }
+          h1 = Holder { holderIdentity = "holder1", holderPublicKey = "key1", holderFingerprint = "finger-print1" }
+          h2 = Holder { holderIdentity = "holder2", holderPublicKey = "key2", holderFingerprint = "finger-print2" }
+          h3 = Holder { holderIdentity = "holder3", holderPublicKey = "key3", holderFingerprint = "finger-print3" }
+          time1 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10000 }, utctDayTime = secondsToDiffTime 60 }
+          time2 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10001 }, utctDayTime = secondsToDiffTime 60 }
+          time3 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10002 }, utctDayTime = secondsToDiffTime 60 }
+          t1 = (fakeTransaction fakeTicket Nothing h1 time1) { transId = "first" }
+          (Right chain2) =
+            appendTicketTransfer initialChain "second" fakeTicket 1 (Just h1) "key1" h2 "key2" time2
+          (Right chain3) =
+            appendTicketTransfer chain2 "third" fakeTicket 1 (Just h2) "key2" h3 "key3" time3
+          predicate ((o1, d1, v1), (o2, d2, v2)) = o1 == o2 && d1 == d2 && v1 == v2
+
+      (verifyTransferHistory chain3 fakeTicket [(Nothing, h1, 0), (Just h1, h2, 1), (Just h2, h3, 1)] predicate) `shouldBe` True
+
+    it "should return False if the given transfer history does not match the transfer history for the given ticket" $ do
+      let initialChain = Chain { chainHead = t1 }
+          h1 = Holder { holderIdentity = "holder1", holderPublicKey = "key1", holderFingerprint = "finger-print1" }
+          h2 = Holder { holderIdentity = "holder2", holderPublicKey = "key2", holderFingerprint = "finger-print2" }
+          h3 = Holder { holderIdentity = "holder3", holderPublicKey = "key3", holderFingerprint = "finger-print3" }
+          time1 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10000 }, utctDayTime = secondsToDiffTime 60 }
+          time2 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10001 }, utctDayTime = secondsToDiffTime 60 }
+          time3 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10002 }, utctDayTime = secondsToDiffTime 60 }
+          t1 = (fakeTransaction fakeTicket Nothing h1 time1) { transId = "first" }
+          (Right chain2) =
+            appendTicketTransfer initialChain "second" fakeTicket 1 (Just h1) "key1" h2 "key2" time2
+          (Right chain3) =
+            appendTicketTransfer chain2 "third" fakeTicket 1 (Just h2) "key2" h3 "key3" time3
+          eqPredicate (a, b) = a == b
+
+      (verifyTransferHistory chain3 fakeTicket [(Nothing, h2, 0), (Just h2, h3, 1), (Just h3, h1, 1)] eqPredicate) `shouldBe` False
+
+  describe "verifySoleTransfer" $ do
+    it "should return True if the given transfer is the only transfer for the given ticket after it was added to the chain" $ do
+      let initialChain = Chain { chainHead = t1 }
+          h1 = Holder { holderIdentity = "holder1", holderPublicKey = "key1", holderFingerprint = "finger-print1" }
+          h2 = Holder { holderIdentity = "holder2", holderPublicKey = "key2", holderFingerprint = "finger-print2" }
+          time1 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10000 }, utctDayTime = secondsToDiffTime 60 }
+          time2 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10001 }, utctDayTime = secondsToDiffTime 60 }
+          t1 = (fakeTransaction fakeTicket Nothing h1 time1) { transId = "first" }
+          (Right chain2) =
+            appendTicketTransfer initialChain "second" fakeTicket 1 (Just h1) "key1" h2 "key2" time2
+
+      (verifySoleTransfer chain2 fakeTicket (Just h1, h2, 1)) `shouldBe` True
+
+    it "should return False if there is more than one transfer for the given ticket after it was added to the chain" $ do
+      let initialChain = Chain { chainHead = t1 }
+          h1 = Holder { holderIdentity = "holder1", holderPublicKey = "key1", holderFingerprint = "finger-print1" }
+          h2 = Holder { holderIdentity = "holder2", holderPublicKey = "key2", holderFingerprint = "finger-print2" }
+          h3 = Holder { holderIdentity = "holder3", holderPublicKey = "key3", holderFingerprint = "finger-print3" }
+          time1 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10000 }, utctDayTime = secondsToDiffTime 60 }
+          time2 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10001 }, utctDayTime = secondsToDiffTime 60 }
+          time3 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10002 }, utctDayTime = secondsToDiffTime 60 }
+          t1 = (fakeTransaction fakeTicket Nothing h1 time1) { transId = "first" }
+          (Right chain2) =
+            appendTicketTransfer initialChain "second" fakeTicket 1 (Just h1) "key1" h2 "key2" time2
+          (Right chain3) =
+            appendTicketTransfer chain2 "third" fakeTicket 1 (Just h2) "key2" h3 "key3" time3
+
+      (verifySoleTransfer chain3 fakeTicket (Just h1, h2, 1)) `shouldBe` False
+
+  describe "verifyIssuer" $ do
+    it "should return True if the given ticket was issued by the given holder at the given value" $ do
+      let initialChain = Chain { chainHead = t1 }
+          h1 = Holder { holderIdentity = "holder1", holderPublicKey = "key1", holderFingerprint = "finger-print1" }
+          h2 = Holder { holderIdentity = "holder2", holderPublicKey = "key2", holderFingerprint = "finger-print2" }
+          time1 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10000 }, utctDayTime = secondsToDiffTime 60 }
+          time2 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10001 }, utctDayTime = secondsToDiffTime 60 }
+          t1 = (fakeTransaction fakeTicket Nothing h1 time1) { transId = "first", transValue = 1 }
+          (Right chain2) =
+            appendTicketTransfer initialChain "second" fakeTicket 1 (Just h1) "key1" h2 "key2" time2
+
+      (verifyIssuer chain2 fakeTicket (h1, 1)) `shouldBe` True
+
+    it "should return False if the given ticket was not issued by the given holder" $ do
+      let initialChain = Chain { chainHead = t1 }
+          h1 = Holder { holderIdentity = "holder1", holderPublicKey = "key1", holderFingerprint = "finger-print1" }
+          h2 = Holder { holderIdentity = "holder2", holderPublicKey = "key2", holderFingerprint = "finger-print2" }
+          time1 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10000 }, utctDayTime = secondsToDiffTime 60 }
+          time2 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10001 }, utctDayTime = secondsToDiffTime 60 }
+          t1 = (fakeTransaction fakeTicket Nothing h1 time1) { transId = "first", transValue = 1 }
+          (Right chain2) =
+            appendTicketTransfer initialChain "second" fakeTicket 1 (Just h1) "key1" h2 "key2" time2
+
+      (verifyIssuer chain2 fakeTicket (h2, 1)) `shouldBe` False
+
+    it "should return False if the given ticket was not issued at the given value" $ do
+      let initialChain = Chain { chainHead = t1 }
+          h1 = Holder { holderIdentity = "holder1", holderPublicKey = "key1", holderFingerprint = "finger-print1" }
+          h2 = Holder { holderIdentity = "holder2", holderPublicKey = "key2", holderFingerprint = "finger-print2" }
+          time1 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10000 }, utctDayTime = secondsToDiffTime 60 }
+          time2 = UTCTime { utctDay = ModifiedJulianDay { toModifiedJulianDay = 10001 }, utctDayTime = secondsToDiffTime 60 }
+          t1 = (fakeTransaction fakeTicket Nothing h1 time1) { transId = "first", transValue = 1 }
+          (Right chain2) =
+            appendTicketTransfer initialChain "second" fakeTicket 1 (Just h1) "key1" h2 "key2" time2
+
+      (verifyIssuer chain2 fakeTicket (h1, 0)) `shouldBe` False
+
 fakeTicket :: Ticket
 fakeTicket = Ticket
   { ticketId = "1"
@@ -321,6 +472,7 @@ fakeHolder = Holder
   , holderFingerprint = "finger-print"
   }
 
+fakeUTCTime :: UTCTime
 fakeUTCTime = UTCTime
   { utctDay = ModifiedJulianDay { toModifiedJulianDay = 0 }
   , utctDayTime = secondsToDiffTime 0

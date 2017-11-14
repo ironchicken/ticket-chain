@@ -52,14 +52,29 @@ data ChainException
   deriving (Show, Typeable)
 instance Exception ChainException
 
-verifyHolder :: Chain -> Ticket -> Holder -> Bool
-verifyHolder = undefined
+verifyCurrentHolder :: Chain -> Ticket -> Holder -> Bool
+verifyCurrentHolder chain ticket holder =
+  holder == currentHolder
+  where
+    (_, currentHolder, _) = head $ reverse $ transferHistory chain ticket
 
-verifyTransactionHistory :: Chain -> Ticket -> [(Maybe Holder, Holder, Value)] -> Bool
-verifyTransactionHistory chain transfers = undefined
+verifyTransferHistory :: Chain -> Ticket -> [Transfer] -> ((Transfer, Transfer) -> Bool) -> Bool
+verifyTransferHistory chain ticket transfers eq =
+  (length transfers == length history) && (all eq $ zip transfers history)
+  where
+    history = transferHistory chain ticket
 
-verifySoleTransfer :: Chain -> Ticket -> (Maybe Holder, Holder, Value) -> Bool
-verifySoleTransfer chain ticket transfer = undefined
+verifySoleTransfer :: Chain -> Ticket -> Transfer -> Bool
+verifySoleTransfer chain ticket transfer =
+  verifyTransferHistory chain ticket (prependOrigin transfer) holdersMatch
+  where
+    prependOrigin t@(Just o, _, v) = (Nothing, o, v) : [t]
+    prependOrigin t@(Nothing, _, _) = [t]
+    holdersMatch ((o1, d1, _), (o2, d2, _)) = o1 == o2 && d1 == d2
+
+verifyIssuer :: Chain -> Ticket -> (Holder, Value) -> Bool
+verifyIssuer chain ticket (issuer, value) =
+  head (transferHistory chain ticket) == (Nothing, issuer, value)
 
 transferHistory :: Chain -> Ticket -> [Transfer]
 transferHistory chain ticket =
