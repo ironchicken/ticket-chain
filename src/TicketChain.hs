@@ -1,11 +1,17 @@
+{-# LANGUAGE DeriveGeneric #-}
+
 module TicketChain where
 
 import Control.Exception (Exception)
+import Data.Binary
+import Data.Bits (xor)
 import qualified Data.ByteString as BS
 import Data.Char (chr, ord)
 import Data.Time.Clock
 import Data.Typeable (Typeable)
-import Network.TLS
+import GHC.Generics
+import Network.Socket (HostName, PortNumber)
+import Network.TLS hiding (HostName)
 
 type Value = Int
 type EncryptionKey = String
@@ -51,6 +57,46 @@ data ChainException
   = DuplicateTransactionException
   deriving (Show, Typeable)
 instance Exception ChainException
+
+data PeerID = PeerID Int BS.ByteString
+  deriving (Eq, Show, Generic, Typeable)
+
+instance Binary PeerID
+
+data PeerIDException
+  = IncompatiblePeerIDsException
+  deriving (Show, Typeable)
+instance Exception PeerIDException
+
+data RoutingTable = RoutingTable
+  { tableSize :: Int
+  , tablePeers :: [(PeerID, HostName, PortNumber)]
+  }
+  deriving (Eq, Show)
+
+data RoutingTableException
+  = RoutingTablePeerSizeMismatchException
+  deriving (Show, Typeable)
+instance Exception RoutingTableException
+
+data Message
+  = FindPeer PeerID
+  | JoinNetwork
+  | LeaveNetwork
+  deriving (Generic, Typeable)
+
+instance Binary Message
+
+data Response
+  = FindPeerR PeerID
+  | FindPeerFail String
+  | JoinNetworkR
+  | JoinNetworkFail String
+  | LeaveNetworkR
+  | LeaveNetworkFail String
+  deriving (Generic, Typeable)
+
+instance Binary Response
 
 verifyCurrentHolder :: Chain -> Ticket -> Holder -> Bool
 verifyCurrentHolder chain ticket holder =
@@ -187,6 +233,85 @@ wellKnownPeers = []
 
 findPeers :: IO [HostName]
 findPeers = undefined
+
+joinNetwork :: HostName -> IO PeerID
+joinNetwork = undefined
+
+leaveNetwork :: IO ()
+leaveNetwork = undefined
+
+grantPeerID :: HostName -> IO PeerID
+grantPeerID = undefined
+
+peerDistance :: PeerID -> PeerID -> Either PeerIDException BS.ByteString
+peerDistance (PeerID size1 id1) (PeerID size2 id2)
+  | size1 == size2 = Right $ BS.pack $ BS.zipWith xor id1 id2
+  | otherwise = Left IncompatiblePeerIDsException
+
+addToRoutingTable :: RoutingTable -> (PeerID, HostName, PortNumber) -> Either RoutingTableException RoutingTable
+addToRoutingTable routes newPeer@((PeerID peerSize _), _, _)
+  | (tableSize routes) == peerSize = Right $ routes { tablePeers = (tablePeers routes) ++ [newPeer] }
+  | otherwise = Left RoutingTablePeerSizeMismatchException
+
+findClosest :: RoutingTable -> PeerID -> PeerID
+findClosest (RoutingTable { tablePeers = ps }) target =
+  foldr closest (getId $ head ps) ps
+  where
+    closest peer current
+      | distToTarget < distToCurrent = getId peer
+      | otherwise = current
+      where
+        Right distToTarget = peerDistance (getId peer) target
+        Right distToCurrent = peerDistance (getId peer) current
+    getId (peerId, _, _) = peerId
+
+nextPeer :: PeerID -> PeerID
+nextPeer (PeerID size bytes) =
+  PeerID size nextBytes
+  where
+    mkId pos = BS.pack $ (take (size - pos - 1) $ repeat 0) ++ [maxBound :: Word8] ++ (take pos $ repeat 0)
+    followingIds = filter (\pid -> pid >= bytes) $ map mkId [0..size - 1]
+    nextBytes
+      | null followingIds = mkId (size - 1)
+      | otherwise = head followingIds
+
+previousPeer :: PeerID -> PeerID
+previousPeer (PeerID size bytes) =
+  PeerID size nextBytes
+  where
+    mkId pos = BS.pack $ (take (size - pos - 1) $ repeat 0) ++ [maxBound :: Word8] ++ (take pos $ repeat 0)
+    precedingIds = filter (\pid -> pid <= bytes) $ map mkId $ reverse [0..size - 1]
+    nextBytes
+      | null precedingIds = BS.pack $ take size $ repeat 0
+      | otherwise = head precedingIds
+
+findPeer :: (Message -> PeerID -> IO Response) -> RoutingTable -> PeerID -> IO PeerID
+findPeer sendMsgAction routes query =
+  findTarget Nothing $ findClosest routes query
+  where
+    findTarget Nothing candidate
+      | candidate == query = return candidate
+      | otherwise = askCandidate candidate
+    findTarget (Just lastAsked) candidate
+      | candidate == query = return candidate
+      | candidate == lastAsked = return lastAsked
+      | otherwise =  askCandidate candidate
+
+    askCandidate candidate = do
+      next <- sendMsgAction (FindPeer query) candidate
+      case next of
+        FindPeerR responseId -> findTarget (Just candidate) responseId
+        FindPeerFail msg -> fail $ "FindPeer failed: " ++ msg
+        _ -> fail "Invalid response to FindPeer message"
+
+pingPeer :: PeerID -> Int -> IO Bool
+pingPeer peerId timeout = undefined
+
+sendMessage :: Message -> PeerID -> IO Response
+sendMessage = undefined
+
+refreshRoutingTable :: RoutingTable -> IO RoutingTable
+refreshRoutingTable = undefined
 
 pullChain :: HostName -> IO Chain
 pullChain = undefined

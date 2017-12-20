@@ -2,8 +2,12 @@ module TicketChainSpec
   (spec)
 where
 
+import Data.Bits (xor)
+import qualified Data.ByteString as BS
 import Data.Time.Calendar
 import Data.Time.Clock
+import Data.Word (Word8)
+import Network.Socket (HostName, PortNumber)
 import Test.Hspec
 import Test.HUnit.Lang
 import TicketChain
@@ -457,6 +461,172 @@ spec = do
             appendTicketTransfer initialChain "second" fakeTicket 1 (Just h1) "key1" h2 "key2" time2
 
       (verifyIssuer chain2 fakeTicket (h1, 0)) `shouldBe` False
+
+  describe "peerDistance" $ do
+    it "should return the XOR between the two given peer IDs" $ do
+      let id1 = BS.pack $ take 4 $ repeat (0 :: Word8)
+          id2 = BS.pack $ take 3 $ repeat (0 :: Word8) ++ [(255 :: Word8)]
+          pid1 = PeerID 4 id1
+          pid2 = PeerID 4 id2
+          expDistance = BS.pack $ BS.zipWith xor id1 id2
+          Right actDistance = peerDistance pid1 pid2
+
+      actDistance `shouldBe` expDistance
+
+    it "should return a PeerIDException if the given peer IDs are of different lengths" $ do
+      let id1 = BS.pack $ take 4 $ repeat (0 :: Word8)
+          id2 = BS.pack $ take 6 $ repeat (0 :: Word8)
+          pid1 = PeerID 4 id1
+          pid2 = PeerID 6 id2
+
+      shouldBeLeft (peerDistance pid1 pid2)
+
+  describe "addToRoutingTable" $ do
+    it "should add the given peer to the given routing table" $ do
+      let initialRoutes = RoutingTable { tableSize = 4, tablePeers = [] }
+          newPeer = PeerID 4 (BS.pack $ take 4 $ repeat (0 :: Word8))
+          Right newRoutes = addToRoutingTable initialRoutes (newPeer, "localhost", 1 :: PortNumber)
+
+      (length $ tablePeers newRoutes) `shouldBe` 1
+
+    it "should return a RoutingTablePeerSizeMismatchException if the given peer ID does not match the size of the given routing table" $ do
+      let initialRoutes = RoutingTable { tableSize = 6, tablePeers = [] }
+          newPeer = PeerID 4 (BS.pack $ take 4 $ repeat (0 :: Word8))
+
+      shouldBeLeft (addToRoutingTable initialRoutes (newPeer, "localhost", 1 :: PortNumber))
+
+  describe "findClosest" $ do
+    it "should return the peer in the given routing table with the smallest distance from the given peer" $ do
+      let routes = RoutingTable { tableSize = 4, tablePeers = ps }
+          ps = [ (p2, "192.168.0.1", 1 :: PortNumber)
+               , (p3, "192.168.0.2", 1 :: PortNumber)
+               , (p4, "192.168.0.3", 1 :: PortNumber)
+               ]
+          p1 = PeerID 4 (BS.pack [0,   0,   0,   0])
+          p2 = PeerID 4 (BS.pack [0,   0,   255, 0])
+          p3 = PeerID 4 (BS.pack [0,   255, 0,   0])
+          p4 = PeerID 4 (BS.pack [255, 0,   0,   0])
+
+      (findClosest routes p1) `shouldBe` p2
+
+  describe "nextPeer" $ do
+    it "should return the cell peer ID following the given peer ID" $ do
+      let p1 = PeerID 4 (BS.pack [0, 0, 0, 0])
+          p1Next = PeerID 4 (BS.pack [0, 0, 0, 255])
+          p2 = PeerID 4 (BS.pack [0, 0, 0, 1])
+          p2Next = PeerID 4 (BS.pack [0, 0, 0, 255])
+          p3 = PeerID 4 (BS.pack [0, 1, 0, 0])
+          p3Next = PeerID 4 (BS.pack [0, 255, 0, 0])
+          p4 = PeerID 4 (BS.pack [1, 0, 0, 0])
+          p5 = PeerID 4 (BS.pack [254, 255, 255, 255])
+          p4And5Next = PeerID 4 (BS.pack [255, 0, 0, 0])
+
+      (nextPeer p1) `shouldBe` p1Next
+      (nextPeer p2) `shouldBe` p2Next
+      (nextPeer p3) `shouldBe` p3Next
+      (nextPeer p4) `shouldBe` p4And5Next
+      (nextPeer p5) `shouldBe` p4And5Next
+
+    it "should return the same peer ID given it's a cell start ID" $ do
+      let p = PeerID 4 (BS.pack [0, 0, 0, 255])
+
+      (nextPeer p) `shouldBe` p
+
+    it "should return the highest cell peer ID if the given peer ID is higher" $ do
+      let p = PeerID 4 (BS.pack [255, 0, 0, 1])
+          pHighest = PeerID 4 (BS.pack [255, 0, 0, 0])
+
+      (nextPeer p) `shouldBe` pHighest
+
+  describe "previousPeer" $ do
+    it "should return the cell peer ID preceding the given peer ID" $ do
+      let p1 = PeerID 4 (BS.pack [0, 0, 0, 1])
+          p1Prev = PeerID 4 (BS.pack [0, 0, 0, 0])
+          p2 = PeerID 4 (BS.pack [0, 1, 0, 0])
+          p2Prev = PeerID 4 (BS.pack [0, 0, 255, 0])
+          p3 = PeerID 4 (BS.pack [1, 0, 0, 0])
+          p4 = PeerID 4 (BS.pack [254, 255, 255, 255])
+          p3And4Prev = PeerID 4 (BS.pack [0, 255, 0, 0])
+
+      (previousPeer p1) `shouldBe` p1Prev
+      (previousPeer p2) `shouldBe` p2Prev
+      (previousPeer p3) `shouldBe` p3And4Prev
+      (previousPeer p4) `shouldBe` p3And4Prev
+
+    it "should return the same peer ID given it's a cell start ID" $ do
+      let p1 = PeerID 4 (BS.pack [0, 0, 0, 255])
+          p2 = PeerID 4 (BS.pack [0, 0, 0, 0])
+
+      (previousPeer p1) `shouldBe` p1
+      (previousPeer p2) `shouldBe` p2
+
+  describe "findPeer" $ do
+    it "should return a peer from the local routing table if the given target is in the routing table" $ do
+      let routes = RoutingTable { tableSize = 4, tablePeers = ps }
+          ps = [ (p1, "192.168.0.1", 1 :: PortNumber)
+               , (p2, "192.168.0.2", 1 :: PortNumber)
+               , (p3, "192.168.0.3", 1 :: PortNumber)
+               , (p4, "192.168.0.4", 1 :: PortNumber)
+               ]
+          p1 = PeerID 4 (BS.pack [0,   0,   0,   0])
+          p2 = PeerID 4 (BS.pack [0,   0,   255, 0])
+          p3 = PeerID 4 (BS.pack [0,   255, 0,   0])
+          p4 = PeerID 4 (BS.pack [255, 0,   0,   0])
+
+          dummyMsgSender _ _ = return $ FindPeerFail "dummy"
+
+      findP3 <- findPeer dummyMsgSender routes p3
+
+      findP3 `shouldBe` p3
+
+    it "should send the FindPeer message to the closest peer to the given target in the routing table" $ do
+      let routes = RoutingTable { tableSize = 4, tablePeers = ps }
+          ps = [ (p1, "192.168.0.1", 1 :: PortNumber)
+               , (p2, "192.168.0.2", 1 :: PortNumber)
+               , (p3, "192.168.0.3", 1 :: PortNumber)
+               , (p4, "192.168.0.4", 1 :: PortNumber)
+               ]
+          p1 = PeerID 4 (BS.pack [0,   0,   0,   0])
+          p2 = PeerID 4 (BS.pack [0,   0,   255, 0])
+          p3 = PeerID 4 (BS.pack [0,   255, 0,   0])
+          p4 = PeerID 4 (BS.pack [255, 0,   0,   0])
+
+          p5 = PeerID 4 (BS.pack [255, 0,   0,   1])
+
+          mockMsgSender (FindPeer findId) targetId
+            | findId == p5 && targetId == p4 = return $ FindPeerR p5
+            | findId == p5 && targetId /= p4 = fail "FindPeer message sent to wrong target"
+            | findId /= p5 = fail "FindPeer message sent with wrong search peer ID"
+          mockMsgSender _ _ = fail "Wrong message type sent to message sender"
+
+      findP5 <- findPeer mockMsgSender routes p5
+
+      findP5 `shouldBe` p5
+
+    it "should accept the closest found peer ID from the network if no exact match is found" $ do
+      let routes = RoutingTable { tableSize = 4, tablePeers = ps }
+          ps = [ (p1, "192.168.0.1", 1 :: PortNumber)
+               , (p2, "192.168.0.2", 1 :: PortNumber)
+               , (p3, "192.168.0.3", 1 :: PortNumber)
+               , (p4, "192.168.0.4", 1 :: PortNumber)
+               ]
+          p1 = PeerID 4 (BS.pack [0,   0,   0,   0])
+          p2 = PeerID 4 (BS.pack [0,   0,   255, 0])
+          p3 = PeerID 4 (BS.pack [0,   255, 0,   0])
+          p4 = PeerID 4 (BS.pack [255, 0,   0,   0])
+
+          p5 = PeerID 4 (BS.pack [255, 0,   0,   1])
+          p6 = PeerID 4 (BS.pack [255, 0,   0,   2])
+
+          mockMsgSender (FindPeer findId) targetId
+            | findId == p5 && targetId == p4 = return $ FindPeerR p6
+            | findId == p5 && targetId == p6 = return $ FindPeerR p6
+            | findId /= p5 = fail "FindPeer message sent with wrong search peer ID"
+          mockMsgSender _ _ = fail "Wrong message type sent to message sender"
+
+      findP5 <- findPeer mockMsgSender routes p5
+
+      findP5 `shouldBe` p6
 
 fakeTicket :: Ticket
 fakeTicket = Ticket
