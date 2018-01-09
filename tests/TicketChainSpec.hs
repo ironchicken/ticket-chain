@@ -6,6 +6,7 @@ import Data.Bits (xor)
 import qualified Data.ByteString as BS
 import Data.Time.Calendar
 import Data.Time.Clock
+import Data.Time.Format
 import Data.Word (Word8)
 import Network.Socket (HostName, PortNumber)
 import Test.Hspec
@@ -655,7 +656,7 @@ fakeTransaction t o d ts = hashTransaction
   , transTicket = t
   , transOrigin = o
   , transDestination = d
-  , transTimestamp = ts
+  , transTimestamp = (formatTime defaultTimeLocale rfc822DateFormat ts)
   , transValue = 0
   , transOriginSignature = ""
   , transDestinationSignature = ""

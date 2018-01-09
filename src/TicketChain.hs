@@ -8,6 +8,7 @@ import Data.Bits (xor)
 import qualified Data.ByteString as BS
 import Data.Char (chr, ord)
 import Data.Time.Clock
+import Data.Time.Format
 import Data.Typeable (Typeable)
 import GHC.Generics
 import Network.Socket (HostName, PortNumber)
@@ -21,21 +22,25 @@ data Ticket = Ticket
   , ticketDescription :: String
   , ticketFaceValue :: Value
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic, Typeable)
+
+instance Binary Ticket
 
 data Transaction = Transaction
   { transId :: String
   , transTicket :: Ticket
   , transOrigin :: Maybe Holder
   , transDestination :: Holder
-  , transTimestamp :: UTCTime
+  , transTimestamp :: String
   , transValue :: Value
   , transOriginSignature :: String
   , transDestinationSignature :: String
   , transPreceding :: Maybe Transaction
   , transHash :: String
   }
-  deriving (Show)
+  deriving (Show, Generic, Typeable)
+
+instance Binary Transaction
 
 instance Eq Transaction where
   (==) a b = transId a == transId b
@@ -45,7 +50,9 @@ data Holder = Holder
   , holderPublicKey :: EncryptionKey
   , holderFingerprint :: String
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic, Typeable)
+
+instance Binary Holder
 
 type Transfer = (Maybe Holder, Holder, Value)
 
@@ -154,7 +161,7 @@ transferTicket tId ticket value origin dest time = Transaction
   , transTicket = ticket
   , transOrigin = origin
   , transDestination = dest
-  , transTimestamp = time
+  , transTimestamp = (formatTime defaultTimeLocale rfc822DateFormat time)
   , transValue = value
   , transOriginSignature = ""
   , transDestinationSignature = ""
