@@ -496,6 +496,31 @@ spec = do
 
       shouldBeLeft (addToRoutingTable initialRoutes (newPeer, "localhost", 1 :: PortNumber))
 
+  describe "removeFromRoutingTable" $ do
+    it "should remove the given peer from the routing table" $ do
+      let initialRoutes = RoutingTable { tableSize = 4, tablePeers = ps }
+          ps = [ (peer, "localhost", 1 :: PortNumber) ]
+          peer = PeerID 4 (BS.pack $ take 4 $ repeat (0 :: Word8))
+          Right newRoutes = removeFromRoutingTable initialRoutes peer
+
+      (length $ tablePeers newRoutes) `shouldBe` 0
+
+    it "should not alter the routing table if the given peer is not present" $ do
+      let initialRoutes = RoutingTable { tableSize = 4, tablePeers = ps }
+          ps = [ (peer, "localhost", 1 :: PortNumber) ]
+          peer = PeerID 4 (BS.pack $ take 4 $ repeat (0 :: Word8))
+          otherPeer = PeerID 4 (BS.pack $ take 4 $ repeat (1 :: Word8))
+          Right newRoutes = removeFromRoutingTable initialRoutes otherPeer
+
+      (length $ tablePeers newRoutes) `shouldBe` 1
+
+    it "should return a RoutingTablePeerSizeMismatchException if the given peer ID does not match the size of the given routing table" $ do
+      let initialRoutes = RoutingTable { tableSize = 6, tablePeers = ps }
+          ps = [ (peer, "localhost", 1 :: PortNumber) ]
+          peer = PeerID 4 (BS.pack $ take 4 $ repeat (0 :: Word8))
+
+      shouldBeLeft (removeFromRoutingTable initialRoutes peer)
+
   describe "findClosest" $ do
     it "should return the peer in the given routing table with the smallest distance from the given peer" $ do
       let routes = RoutingTable { tableSize = 4, tablePeers = ps }

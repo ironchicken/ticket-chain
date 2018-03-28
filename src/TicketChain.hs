@@ -260,6 +260,11 @@ addToRoutingTable routes newPeer@((PeerID peerSize _), _, _)
   | (tableSize routes) == peerSize = Right $ routes { tablePeers = (tablePeers routes) ++ [newPeer] }
   | otherwise = Left RoutingTablePeerSizeMismatchException
 
+removeFromRoutingTable :: RoutingTable -> PeerID -> Either RoutingTableException RoutingTable
+removeFromRoutingTable routes peerId@(PeerID size _)
+  | (tableSize routes) == size = Right $ routes { tablePeers = (filter (\(pid, _, _) -> pid /= peerId) $ tablePeers routes) }
+  | otherwise = Left RoutingTablePeerSizeMismatchException
+
 findClosest :: RoutingTable -> PeerID -> PeerID
 findClosest (RoutingTable { tablePeers = ps }) target =
   foldr closest (getId $ head ps) ps
