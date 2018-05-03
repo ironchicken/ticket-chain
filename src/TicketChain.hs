@@ -35,7 +35,7 @@ data Transaction = Transaction
   , transValue :: Value
   , transOriginSignature :: String
   , transDestinationSignature :: String
-  , transPreceding :: Maybe Transaction
+  , transPreceding :: Maybe (Verified Transaction)
   , transHash :: String
   }
   deriving (Show, Generic, Typeable)
@@ -44,6 +44,22 @@ instance Binary Transaction
 
 instance Eq Transaction where
   (==) a b = transId a == transId b
+
+data Unverified a = Unverified a
+  deriving (Eq, Show, Generic, Typeable)
+
+instance (Binary a) => Binary (Unverified a)
+
+data Verified a
+  = Verified a
+  | Unverifiable a
+  deriving (Eq, Show, Generic, Typeable)
+
+instance (Binary a) => Binary (Verified a)
+
+instance Functor Verified where
+  fmap f (Verified x) = Verified $ f x
+  fmap f (Unverifiable x) = Unverifiable $ f x
 
 data Holder = Holder
   { holderIdentity :: String
@@ -57,8 +73,10 @@ instance Binary Holder
 type Transfer = (Maybe Holder, Holder, Value)
 
 data Chain = Chain
-  { chainHead :: Transaction }
-  deriving (Eq, Show)
+  { chainHead :: Verified Transaction }
+  deriving (Eq, Show, Generic, Typeable)
+
+instance Binary Chain
 
 data ChainException
   = DuplicateTransactionException
@@ -134,7 +152,7 @@ transferHistory chain ticket =
   reverse $ orderTransfers Nothing [] transfers
   where
     transactions = findTransactionsForTicket chain ticket
-    transfers = map (\t -> (transOrigin t, transDestination t, transValue t)) transactions
+    transfers = map (\(Verified t) -> (transOrigin t, transDestination t, transValue t)) transactions
     orderTransfers currentHolder ordered (t@(o, d, _):ts)
       | o == currentHolder = orderTransfers (Just d) (t : ordered) transfers
       | otherwise = orderTransfers currentHolder ordered ts
@@ -144,19 +162,19 @@ appendTicketTransfer :: Chain -> String -> Ticket -> Value -> Maybe Holder -> En
 appendTicketTransfer chain tId ticket value (Just origin) originKey dest destKey time =
   appendTransaction chain transaction
   where
-    transaction = hashTransaction
-      $ signTransactionAsOrigin origin originKey
+    transaction = hashTransaction <$>
+      ( signTransactionAsOrigin origin originKey
       $ signTransactionAsDestination dest destKey
-      $ transferTicket tId ticket value (Just origin) dest time
+      $ transferTicket tId ticket value (Just origin) dest time )
 appendTicketTransfer chain tId ticket value Nothing _ dest destKey time =
   appendTransaction chain transaction
   where
-    transaction = hashTransaction
-      $ signTransactionAsDestination dest destKey
-      $ transferTicket tId ticket value Nothing dest time
+    transaction = hashTransaction <$>
+      ( signTransactionAsDestination dest destKey
+      $ transferTicket tId ticket value Nothing dest time )
 
-transferTicket :: String -> Ticket -> Value -> Maybe Holder -> Holder -> UTCTime -> Transaction
-transferTicket tId ticket value origin dest time = Transaction
+transferTicket :: String -> Ticket -> Value -> Maybe Holder -> Holder -> UTCTime -> Verified Transaction
+transferTicket tId ticket value origin dest time = Verified Transaction
   { transId = tId
   , transTicket = ticket
   , transOrigin = origin
@@ -178,22 +196,27 @@ detachStub = undefined
 splitTicket :: Chain -> Ticket -> (Ticket, Ticket)
 splitTicket = undefined
 
-makeTransaction :: Chain -> Ticket -> Value -> Maybe Holder -> EncryptionKey -> Holder -> Transaction
+makeTransaction :: Chain -> Ticket -> Value -> Maybe Holder -> EncryptionKey -> Holder -> Verified Transaction
 makeTransaction chain ticket value origin originKey dest = undefined
 
-signTransactionAsOrigin :: Holder -> EncryptionKey -> Transaction -> Transaction
-signTransactionAsOrigin _ originKey transaction =
-  transaction { transOriginSignature = signString (serialiseTransaction transaction) originKey }
+signTransactionAsOrigin :: Holder -> EncryptionKey -> Verified Transaction -> Verified Transaction
+signTransactionAsOrigin _ originKey (Verified transaction) =
+  Verified transaction { transOriginSignature = signString (serialiseTransaction transaction) originKey }
+signTransactionAsOrigin _ originKey (Unverifiable transaction) =
+  Unverifiable transaction { transOriginSignature = signString (serialiseTransaction transaction) originKey }
 
-signTransactionAsDestination :: Holder -> EncryptionKey -> Transaction -> Transaction
-signTransactionAsDestination _ destKey transaction =
-  transaction { transDestinationSignature = signString (serialiseTransaction transaction) destKey }
+signTransactionAsDestination :: Holder -> EncryptionKey -> Verified Transaction -> Verified Transaction
+signTransactionAsDestination _ destKey (Verified transaction) =
+  Verified transaction { transDestinationSignature = signString (serialiseTransaction transaction) destKey }
+signTransactionAsDestination _ destKey (Unverifiable transaction) =
+  Unverifiable transaction { transDestinationSignature = signString (serialiseTransaction transaction) destKey }
 
 hashTransaction :: Transaction -> Transaction
 hashTransaction transaction =
   transaction { transHash = hash $ transPreceding transaction }
   where
-    hash (Just preceding) = digest $ transHash preceding ++ serialiseTransaction transaction
+    hash (Just (Verified preceding)) = digest $ transHash preceding ++ serialiseTransaction transaction
+    hash (Just (Unverifiable preceding)) = digest $ transHash preceding ++ serialiseTransaction transaction
     hash Nothing = digest $ serialiseTransaction transaction
 
 serialiseTransaction :: Transaction -> String
@@ -204,15 +227,16 @@ serialiseTransaction transaction =
   ++ (show $ transValue transaction)
   ++ (show $ transTimestamp transaction)
 
-appendTransaction :: Chain -> Transaction -> Either ChainException Chain
-appendTransaction chain transaction =
+appendTransaction :: Chain -> Verified Transaction -> Either ChainException Chain
+appendTransaction chain (Verified transaction) =
   case findTransactionById chain (transId transaction) of
     Just _ -> Left DuplicateTransactionException
-    Nothing -> Right $ chain { chainHead = chainedTransaction }
+    Nothing -> Right $ chain { chainHead = (Verified chainedTransaction) }
   where
     chainedTransaction =
-      transaction { transPreceding = Just oldChainHead }
-    oldChainHead = chainHead chain
+      transaction { transPreceding = Just (Verified oldChainHead) }
+    (Verified oldChainHead) = chainHead chain
+appendTransaction _ (Unverifiable _) = Left UnverifiableTransactionException
 
 loadPrivateKey :: IO EncryptionKey
 loadPrivateKey = undefined
@@ -331,16 +355,16 @@ pullChain = undefined
 pushChain :: Chain -> [HostName] -> IO ()
 pushChain = undefined
 
-traverseChain :: (Transaction -> a) -> Chain -> [a]
+traverseChain :: (Verified Transaction -> a) -> Chain -> [a]
 traverseChain f chain = foldChain (\ts t -> (f t) : ts) [] chain
 
-foldChain :: (a -> Transaction -> a) -> a -> Chain -> a
+foldChain :: (a -> Verified Transaction -> a) -> a -> Chain -> a
 foldChain f initial chain = fold initial (chainHead chain)
   where
-    fold acc t@(Transaction { transPreceding = Just p }) = fold (f acc t) p
+    fold acc t@(Verified Transaction { transPreceding = Just p }) = fold (f acc t) p
     fold acc t = f acc t
 
-filterChain :: (Transaction -> Bool) -> Chain -> [Transaction]
+filterChain :: (Verified Transaction -> Bool) -> Chain -> [Verified Transaction]
 filterChain p chain = foldChain filterWithP [] chain
   where
     filterWithP ts t = if p t then t : ts else ts
@@ -348,22 +372,24 @@ filterChain p chain = foldChain filterWithP [] chain
 chainLength :: Chain -> Int
 chainLength chain = foldChain (\acc _ -> acc + 1) 0 chain
 
-findTransactionById :: Chain -> String -> Maybe Transaction
+findTransactionById :: Chain -> String -> Maybe (Verified Transaction)
 findTransactionById chain tId =
   foldChain checkTransaction Nothing chain
   where
-    checkTransaction Nothing t
-      | transId t == tId = Just t
+    checkTransaction Nothing (Verified t)
+      | transId t == tId = Just (Verified t)
       | otherwise = Nothing
+    checkTransaction Nothing (Unverifiable _) = Nothing
     checkTransaction (Just t) _ = Just t
 
-findTransactionsForTicket :: Chain -> Ticket -> [Transaction]
+findTransactionsForTicket :: Chain -> Ticket -> [Verified Transaction]
 findTransactionsForTicket chain ticket =
   filterChain checkTicket chain
   where
-    checkTicket transaction = transTicket transaction == ticket
+    checkTicket (Verified transaction) = transTicket transaction == ticket
+    checkTicket (Unverifiable _) = False
 
-findTransactionsForHolder :: Chain -> Holder -> [Transaction]
+findTransactionsForHolder :: Chain -> Holder -> [Verified Transaction]
 findTransactionsForHolder = undefined
 
 encryptString :: String -> EncryptionKey -> String
